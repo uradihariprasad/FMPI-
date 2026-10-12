@@ -1,0 +1,44 @@
+# ───────────────────────────────────────────────────────────────────
+# Render Blueprint — FMPI Engine
+#
+# Deploy:  Render Dashboard → New → Blueprint → pick this repo → Apply.
+# Everything below is provisioned automatically: a managed PostgreSQL
+# instance, the web service, the DATABASE_URL wiring and the health check.
+#
+# No migration step is required — the app creates its own schema
+# idempotently on first database use (src/db/bootstrap.ts).
+# ───────────────────────────────────────────────────────────────────
+databases:
+  - name: fmpi-db
+    databaseName: fmpi
+    user: fmpi
+    plan: free
+    region: singapore
+
+services:
+  - type: web
+    name: fmpi-engine
+    runtime: node
+    plan: free
+    region: singapore # closest Render region to NSE/BSE for lower feed latency
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start # Next.js binds to $PORT automatically
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: fmpi-db
+          property: connectionString
+      - key: NODE_VERSION
+        value: "22.11.0"
+      - key: NODE_ENV
+        value: production
+      # Optional: enables the Options Positioning component (15% weight).
+      # Without it the component is honestly reported as MISSING and its
+      # weight is renormalised — the app works fully without a token.
+      - key: UPSTOX_ACCESS_TOKEN
+        sync: false
+      # Optional tuning: max PostgreSQL pool connections (free tier is small).
+      - key: PGPOOL_MAX
+        value: "5"
